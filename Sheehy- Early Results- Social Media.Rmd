@@ -1,0 +1,94 @@
+---
+title: "Social Media"
+author: "Bridget Sheehy"
+date: "2025-11-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+```
+
+```{r}
+getwd()
+```
+
+```{r}
+#Install and load
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(lmtest)
+library(sandwich)
+df <- read_csv("Mental_Health_and_Social_Media_Balance_Dataset.csv")
+
+#Clean columns
+names(df) <- make.names(names(df))
+
+#Convert data types
+df <- df %>%
+  mutate(
+    Gender = factor(Gender),  
+    Age = as.numeric(Age)
+  )
+```
+
+```{r}
+#Outcomes to test
+outcomes <- c("Happiness_Index.1.10.",
+              "Sleep_Quality.1.10.",
+              "Stress_Level.1.10.",
+              "Exercise_Frequency.week.")
+
+#Fit regressions for each outcome
+models <- lapply(outcomes, function(y) {
+  formula <- as.formula(paste0(y, " ~ Daily_Screen_Time.hrs."))
+  lm(formula, data = df)
+})
+
+names(models) <- outcomes
+lapply(models, summary)
+```
+
+```{r}
+#Pivot the data to long format for easy plotting
+library(tidyr)
+
+df_long <- df %>%
+  pivot_longer(cols = all_of(outcomes),
+               names_to = "Outcome",
+               values_to = "Value")
+
+ggplot(df_long, aes(x = Daily_Screen_Time.hrs., y = Value)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = TRUE, color = "red") +
+  facet_wrap(~ Outcome, scales = "free_y") +
+  labs(
+    title = "Effect of Daily Screen Time on Well-being Variables",
+    x = "Daily Screen Time (hours)",
+    y = "Outcome Value"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#Coefficient Plot
+library(broom)
+
+coef_df <- lapply(models, tidy) %>%
+  bind_rows(.id = "Outcome") %>%
+  filter(term == "Daily_Screen_Time.hrs.")
+
+ggplot(coef_df, aes(x = estimate, y = reorder(Outcome, estimate))) +
+  geom_point(size = 3) +
+  geom_errorbarh(aes(xmin = estimate - 1.96*std.error,
+                     xmax = estimate + 1.96*std.error),
+                 height = 0.15) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  labs(
+    title = "Effect of Daily Screen Time Across Outcomes",
+    x = "Coefficient (±95% CI)",
+    y = NULL
+  ) +
+  theme_minimal()
+```
+
